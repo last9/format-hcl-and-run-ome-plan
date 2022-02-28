@@ -1,0 +1,34 @@
+name: 'HCL test and plan'
+description: 'This github action will help you run test and plan to dry-run and find syntax errors in your hcl files'
+inputs:
+  openmetrics-exporter-directory:  # id of input
+    description: 'link to resource.json file against which you want to run tests'
+    required: true
+    default: '.'
+  operation-to-be-performed:
+    description: 'do you want to test and plan or just test or plan? expected values are: test, test-and-plan'
+    required: false
+    default: 'test-and-plan'
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/setup-go@v2
+      with:
+        go-version: "1.16"
+    - id: Get-hclfmt
+      run: GO111MODULE=on go get github.com/hashicorp/hcl/v2/cmd/hclfmt
+      shell: bash
+    - id: format_hcl_files_with_hclfmt
+      run: find docker/openmetrics-exporter-resources -name "*.hcl" | xargs hclfmt -w
+      shell: bash
+    - id: lint_hcl_files
+      run: find docker/openmetrics-exporter-resources -name "*.hcl" | xargs -I {} bash -c "printf 'Linting {}\n' && diff {} <(hclfmt -check {})"
+      shell: bash        
+    - id: get_openmetrics_exporter
+      if: ${{ inputs.openmetrics-exporter-directory }} == test-and-plan
+      run: mkdir -p /tmp/openmetrics-exporter; cd /tmp/openmetrics-exporter; wget https://last9.jfrog.io/artifactory/last9-openmetrics-exporter/release-v0.1/openmetrics-exporter_release-v0.1_linux_amd64 -O openmetrics-exporter && chmod +x openmetrics-exporter && cd
+      shell: bash
+    - id: run_openmetrics-exporter_plan
+      if: ${{ inputs.openmetrics-exporter-directory }} == test-and-plan
+      run: cd ${{ inputs.openmetrics-exporter-directory }} && /tmp/openmetrics-exporter/openmetrics-exporter plan --dir . --run-once
+      shell: bash
